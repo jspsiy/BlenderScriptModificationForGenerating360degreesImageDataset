@@ -73,7 +73,7 @@ def handle_found_object(
 
 
         # get the command to run
-        command = f"sudo blender-3.2.2-linux-x64/blender --background --python blender_script.py -- {args} "
+        command = f"blender-3.2.2-linux-x64/blender --background --python blender_script.py -- {args} "
 
         # if using_gpu:
         #     command = f"export DISPLAY=:0.{gpu_i} && {command}"
@@ -144,7 +144,7 @@ def main():
     parser.add_argument("--processes", type=int, default=multiprocessing.cpu_count() * 3, help="Number of processes to use for rendering.")
     parser.add_argument("--save_repo_format", choices=["zip", "tar", "tar.gz", "files"], default=None, help="Format for saving output.")
     parser.add_argument("--only_northern_hemisphere", action="store_true", default=False, help="Limit renders to the northern hemisphere.")
-    parser.add_argument("--render_timeout", type=int, default=3000, help="Timeout for each render process.")
+    parser.add_argument("--render_timeout", type=int, default=None, help="Timeout for each render process.")
     parser.add_argument("--gpu_devices", type=int, nargs='+', default=None, help="GPU device IDs to use for rendering.")
 
     # Parse the arguments

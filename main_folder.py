@@ -71,7 +71,7 @@ def handle_found_object(
             args += " --only_northern_hemisphere"
 
         # get the command to run
-        command = f"sudo blender-3.2.2-linux-x64/blender --background --python blender_script.py -- {args} "
+        command = f"CUDA_VISIBLE_DEVICES=0 blender-3.2.2-linux-x64/blender --background --python blender_script.py -- {args} "
 
         # if using_gpu:
         #     command = f"export DISPLAY=:0.{gpu_i} && {command}"
@@ -145,7 +145,7 @@ def handle_found_object(
 
 
         # get the command to run
-        command = f"sudo blender-3.2.2-linux-x64/blender --background --python blender_script.py -- {args} "
+        command = f"blender-3.2.2-linux-x64/blender --background --python blender_script.py -- {args} "
 
         # if using_gpu:
         #     command = f"export DISPLAY=:0.{gpu_i} && {command}"
@@ -188,19 +188,25 @@ def render_objects(
     # Iterate over each .glb file in the input directory
     supported_extensions = [".glb", ".obj", ".fbx", ".vrm"]
 
-# Check if the file has any of the supported extensions
-
     for filename in os.listdir(input_dir):
         if any(filename.endswith(ext) for ext in supported_extensions):
             object_path = os.path.join(input_dir, filename)
-            
+
             # Extract the object name (without extension) to create an output subdirectory
             object_name = os.path.splitext(filename)[0]
             object_render_dir = os.path.join(output_dir, object_name)
-            
+
+            # Check if 095.png exists in the folder
+            if os.path.exists(os.path.join(object_render_dir, "095.png")):
+                logger.info(f"Skipping {object_name}: 095.png already exists.")
+                continue
+
+            logger.info(f"CREATING {object_name}")
+
+
             # Create the output directory if it doesn't exist
             os.makedirs(object_render_dir, exist_ok=True)
-            
+
             # Render the object
             handle_found_object(
                 object_path=object_path,
@@ -221,7 +227,7 @@ def main():
     parser.add_argument("--processes", type=int, default=multiprocessing.cpu_count() * 3, help="Number of processes to use for rendering.")
     parser.add_argument("--save_repo_format", choices=["zip", "tar", "tar.gz", "files"], default=None, help="Format for saving output.")
     parser.add_argument("--only_northern_hemisphere", action="store_true", default=False, help="Limit renders to the northern hemisphere.")
-    parser.add_argument("--render_timeout", type=int, default=3000, help="Timeout for each render process.")
+    parser.add_argument("--render_timeout", type=int, default=None, help="Timeout for each render process.")
     parser.add_argument("--gpu_devices", type=int, nargs='+', default=None, help="GPU device IDs to use for rendering.")
 
     # Parse the arguments

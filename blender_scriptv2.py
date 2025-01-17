@@ -782,9 +782,6 @@ def render_object(
     Returns:
         None
     """
-    import math
-    import json
-
     os.makedirs(output_dir, exist_ok=True)
     scene = bpy.context.scene
 
@@ -815,40 +812,47 @@ def render_object(
     else:
         metadata["random_color"] = None
 
+    # Save metadata
+    #metadata_path = os.path.join(output_dir, "metadata.json")
+    #os.makedirs(os.path.dirname(metadata_path), exist_ok=True)
+    #with open(metadata_path, "w", encoding="utf-8") as f:
+    #    json.dump(metadata, f, sort_keys=True, indent=2)
+
     # Normalize and set lighting
     normalize_scene()
     randomize_lighting()
-
+    
     # Set up an empty object as the target
     target_empty = bpy.data.objects.new("TargetEmpty", None)
     bpy.context.collection.objects.link(target_empty)
 
-    # Create a single camera
-    bpy.ops.object.camera_add()
-    camera = bpy.context.object
-    camera.name = "DynamicCamera"
-    
-    # Prepare camera origins and rotations
-    def generate_camera_positions(num: int, distance: float, elevation_angles: list):
-        positions = []
-        rotations = []
+    # Create cameras around Z-axis elevations
+    def create_cameras(num: int, distance: float, elevation_angles: list) -> list:
+        cameras = []
         for elevation in elevation_angles:
             for i in range(num):
                 angle = math.radians(360 / num * i)
                 x = distance * math.cos(angle)
                 y = distance * math.sin(angle)
-                z = distance * math.sin(math.radians(elevation))
 
-                positions.append((x, y, z))
+                bpy.ops.object.camera_add(location=(x, y, distance * math.sin(math.radians(elevation))))
+                camera = bpy.context.object
+                camera.name = f"Camera_Z{elevation}_{i}"
+                camera.data.lens = 35
+                camera.data.sensor_width = 32
 
-                # Compute rotation to point at the origin
-                direction = Vector((0, 0, 0)) - Vector((x, y, z))
-                rot_quat = direction.to_track_quat("-Z", "Y")
-                rotations.append(rot_quat.to_euler())
-        return positions, rotations
+                cam_constraint = camera.constraints.new(type="TRACK_TO")
+                cam_constraint.track_axis = "TRACK_NEGATIVE_Z"
+                cam_constraint.up_axis = "UP_Y"
+                cam_constraint.target = target_empty
 
+                cameras.append(camera)
+        
+        return cameras
+
+    # Z-axis elevation steps only
     elevation_steps_z = [-10, 0, 10, 20, 30, 40]
-    positions, rotations = generate_camera_positions(num_renders, distance, elevation_steps_z)
+    cameras_z = create_cameras(num_renders, distance, elevation_steps_z)
 
     # Prepare metadata storage
     render_metadata = {
@@ -856,10 +860,7 @@ def render_object(
         "render_data": []
     }
 
-    for i, (pos, rot) in enumerate(zip(positions, rotations)):
-        # Update camera position and rotation
-        camera.location = pos
-        camera.rotation_euler = rot
+    for i, camera in enumerate(cameras_z):
         scene.camera = camera  # Set the camera as active
 
         # Render image
@@ -871,23 +872,24 @@ def render_object(
         # Save camera's RT matrix
         rt_matrix = get_3x4_RT_matrix_from_blender(camera)
         rt_matrix_path = os.path.join(output_dir, f"RT_{i:03d}.npy")
-        np.save(rt_matrix_path, rt_matrix)
-
+        #np.save(rt_matrix_path, rt_matrix)
+        
         # Collect render data
-        if render_metadata["intrinsics"] is None:
-            render_metadata["intrinsics"] = get_calibration_matrix_K_from_blender(camera).tolist()
-        render_metadata["render_data"].append({
-            "render_path": render_path,
-            "rt_matrix_path": rt_matrix_path,
-            "elevation": pos[2]
-        })
+        # if render_metadata["intrinsics"] is None:
+        #     render_metadata["intrinsics"] = get_calibration_matrix_K_from_blender(camera).tolist()
+        # render_metadata["render_data"].append({
+        #     "render_path": render_path,
+        #     "rt_matrix_path": rt_matrix_path,
+        #     "elevation": camera.location[2]
+        # })
 
     # Save summary metadata file
     metadata_path = os.path.join(output_dir, "metadata.json")
     with open(metadata_path, 'w') as f:
-        json.dump(render_metadata, f, indent=4)
+         json.dump(render_metadata, f, indent=4)
 
     print("Rendering complete. Metadata saved.")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -932,8 +934,8 @@ if __name__ == "__main__":
     render.engine = args.engine
     render.image_settings.file_format = "PNG"
     render.image_settings.color_mode = "RGBA"
-    render.resolution_x = 512
-    render.resolution_y = 512
+    render.resolution_x = 1024
+    render.resolution_y = 1024
     render.resolution_percentage = 100
 
     # Set cycles settings
